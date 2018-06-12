@@ -320,6 +320,7 @@ public class InteractiveObjectController : MonoBehaviour {
     {
         return attachedObjects;
     }
+    
 
     public int GetMoveMode()
     {

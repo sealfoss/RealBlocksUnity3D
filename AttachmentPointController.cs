@@ -8,7 +8,7 @@ public class AttachmentPointController : MonoBehaviour {
     public string attachmentTypeName = "";
 
     // trigger stuff
-    private InteractiveObjectController owningObject;
+    private InteractiveObjectController owningObject { get { return GetComponentInParent<InteractiveObjectController>(); ; } }
     public InteractiveObjectController attachingObject;
     public ManipulatorController attachingController;
     public AttachmentTriggerController attachingTrigger;
@@ -32,7 +32,7 @@ public class AttachmentPointController : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
-        owningObject = GetComponentInParent<InteractiveObjectController>();
+        //owningObject = GetComponentInParent<InteractiveObjectController>();
     }
 	
 	// Update is called once per frame
@@ -201,12 +201,13 @@ public class AttachmentPointController : MonoBehaviour {
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!activated && !owningObject.busy)
+        if (!activated && owningObject && !owningObject.busy)
         {
             AttachmentTriggerController otherTrigger = other.GetComponent<AttachmentTriggerController>();
 
             if (otherTrigger && otherTrigger.attachmentTypeName == this.attachmentTypeName
-                && !owningObject.attachedObjects.Contains(otherTrigger.GetOwningObject()) && otherTrigger.CheckReadyToAttach())
+                && otherTrigger.GetOwningObject() && !owningObject.attachedObjects.Contains(otherTrigger.GetOwningObject()) 
+                && otherTrigger.CheckReadyToAttach())
             {
                 Activate(otherTrigger);
             }
