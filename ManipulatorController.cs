@@ -13,11 +13,12 @@ public class ManipulatorController : MonoBehaviour {
     private HashSet<InteractiveObjectController> availableObjects;
     private InteractiveObjectController closestObject;
     private Transform interactionPoint;
-    private Transform referencePoint;
     private InteractiveObjectController grabbedObject; // The object this manipulator is currently in control of
     bool left; // whether this is the left controller
     public float transitionRate = 10.0f;
     public float transitionThreshold = 0.1f;
+    private Transform moveTarget; // where you're moving the grabbed object to.
+    private Transform transitionGuide; // moves the grabbed object when transitioning
 
     // input bools to prevent constant grabbing, trigger pulls, etc...
     bool grabStop;
@@ -36,9 +37,9 @@ public class ManipulatorController : MonoBehaviour {
         availableObjects = new HashSet<InteractiveObjectController>();
         interactionPoint = new GameObject().transform;
         interactionPoint.gameObject.name = "Interaction Point " + controllerIndex;
-        referencePoint = new GameObject().transform;
-        referencePoint.gameObject.name = "Reference Point " + controllerIndex;
         grabStop = false;
+        transitionGuide = new GameObject().transform;
+        transitionGuide.name = "Transition Guide" + controllerIndex;
     }
 	
 	// Update is called once per frame
@@ -130,132 +131,37 @@ public class ManipulatorController : MonoBehaviour {
             closestObject = null;
         }
     }
-    
 
 
     public void GrabObject(InteractiveObjectController objectToGrab)
     {
         if (objectToGrab)
         {
-            // if the object is already grabbed, have the hand that's grabbing it release its hold, and grab it with this hand
-            if (objectToGrab.GetGrabbed())
+            // if the object is attached, check if the root is grabbable. If root is grabbable, but hasn't been grabbed, grab it now with this hand
+            if (objectToGrab.GetAttached())
             {
-                objectToGrab.GetAttachedController().ReleaseObject();
+                InteractiveObjectController root = objectToGrab.GetRootObject();
+                
+                if (root.grabbable && !root.grabbed && !root.attached)
+                {
+                    objectToGrab = root;
+                }
             }
 
-            switch (objectToGrab.moveMode)
+            // if the object to grab is already grab, tell the other hand to let go
+            if (objectToGrab.grabbed)
             {
-                case 0:
-                    break;
-
-                case 1:
-                    GrabPhysics(objectToGrab);
-                    break;
-
-                case 2:
-                    GrabTransition(objectToGrab);
-                    break;
-
-                default:
-                    Debug.LogError("Bad MoveMode on object to grab!");
-                    break;
-                    
+                objectToGrab.attachedController.ReleaseObject();
             }
-
-            objectToGrab.Grab(this);
+            
+            SetInteractionPoint(objectToGrab); // if the object has a grab handle, grab it by that. otherwise, grab it by the position the controller is current in relative to the object
+            SetMoveTarget(this.transform); // set the move target to the grabbing hand
             grabbedObject = objectToGrab;
+            grabbedObject.Grab(this);
         }
-    }
-
-    public void GrabPhysics(InteractiveObjectController objectToGrab)
-    {
-        // if the object is attached, check if the root is grabbable. If root is grabbable, but hasn't been grabbed, grab it now with this hand
-        if (objectToGrab.GetAttached())
-        {
-            InteractiveObjectController root = objectToGrab.GetRootObject();
-
-            if (root.grabbable && !root.grabbed && !root.attached)
-            {
-                objectToGrab = root;
-            }
-        }
-
-        // if the object has a grab handle, grab it by that
-        SetInteractionPoint(objectToGrab);
     }
 
    
-
-
-    public void SetInteractionPoint(InteractiveObjectController objectToGrab)
-    {
-        Transform newPoint;
-
-        if(objectToGrab.grabHandle)
-        {
-            objectToGrab.transform.rotation = Quaternion.Lerp(this.transform.rotation, objectToGrab.grabHandle.rotation, Time.deltaTime * 1);
-            newPoint = objectToGrab.grabHandle;
-        }
-        else
-        {
-            newPoint = this.transform;
-        }
-
-        interactionPoint.SetParent(null);
-        interactionPoint.position = newPoint.position;
-        interactionPoint.rotation = newPoint.rotation;
-        interactionPoint.SetParent(objectToGrab.transform);
-    }
-
-    private void GrabTransition(InteractiveObjectController objectToGrab)
-    {
-        SetInteractionPoint(objectToGrab);
-        SetReferencePoint(objectToGrab);
-        objectToGrab.PhysicsOff();
-    }
-
-    private void SetReferencePoint(InteractiveObjectController objectToGrab)
-    {
-        referencePoint.position = interactionPoint.position;
-        referencePoint.rotation = interactionPoint.rotation;
-        objectToGrab.transform.SetParent(referencePoint);
-    }
-
-    private void MoveTransition(Transform target)
-    {
-        if (GetDistance(referencePoint, this.transform) <= transitionThreshold)
-        {
-            referencePoint.position = this.transform.position;
-            referencePoint.rotation = this.transform.rotation;
-            grabbedObject.transform.SetParent(null);
-            grabbedObject.PhysicsOn();
-            grabbedObject.moveMode = 1;
-            GrabObject(grabbedObject);
-        }
-        else
-        {
-            referencePoint.position = Vector3.Lerp(referencePoint.position, target.position, Time.deltaTime * transitionRate);
-            referencePoint.rotation = Quaternion.Lerp(referencePoint.rotation, target.rotation, Time.deltaTime * transitionRate);
-        }
-    }
-
-    private float GetDistance(Transform a, Transform b)
-    {
-        return Vector3.Magnitude(a.position - b.position);
-    }
-
-
-
-    public void ReleaseObject()
-    {
-        if (grabbedObject)
-        {
-            grabbedObject.PhysicsOn();
-            grabbedObject.moveMode = 1;
-            grabbedObject.Release();
-            grabbedObject = null;
-        }
-    }
 
 
 
@@ -263,10 +169,10 @@ public class ManipulatorController : MonoBehaviour {
     {
         if(grabbedObject)
         {
-            switch (grabbedObject.moveMode)
+            switch (grabbedObject.GetMoveMode())
             {
                 case 0:
-                    MoveAttached();
+                    // do nothing
                     break;
 
                 case 1:
@@ -307,13 +213,13 @@ public class ManipulatorController : MonoBehaviour {
         Rigidbody rBody = grabbedObject.GetRigidbody();
 
         //establish the direction the grabbed object needs to be moving in, in order to place it "in" the grabbing manipulator
-        posDelta = this.transform.position - interactionPoint.position;
+        posDelta = moveTarget.position - interactionPoint.position;
         //set the grabbed object's velocity so that it is constantly moving towards where it should be as a grabbed object
 
         rBody.velocity = posDelta * grabbedObject.GetCalculatedVelocityFactor() * Time.fixedDeltaTime;
         
 
-        rotDelta = this.transform.rotation * Quaternion.Inverse(interactionPoint.rotation);
+        rotDelta = moveTarget.rotation * Quaternion.Inverse(interactionPoint.rotation);
         rotDelta.ToAngleAxis(out angle, out axis);
 
         if (angle > 180)
@@ -330,18 +236,81 @@ public class ManipulatorController : MonoBehaviour {
     }
 
 
-
-    private void CheckInteractionPointPosition()
+    private void MoveTransition()
     {
-        float speed = 10;
+        transitionGuide.position = Vector3.Lerp(transitionGuide.position, moveTarget.position, Time.deltaTime * transitionRate);
+        transitionGuide.rotation = Quaternion.Lerp(transitionGuide.rotation, moveTarget.rotation, Time.deltaTime * transitionRate);
+    }
 
-        if(Vector3.Magnitude(interactionPoint.position - referencePoint.position) > grabbedObject.gripPlayDistance)
+
+
+
+
+
+
+
+    public void SetInteractionPoint(InteractiveObjectController objectToGrab)
+    {
+        Transform newPoint;
+
+        if (objectToGrab.grabHandle)
         {
-            interactionPoint.position = Vector3.Lerp(interactionPoint.position, referencePoint.position, Time.deltaTime * speed);
-            interactionPoint.rotation = Quaternion.Lerp(interactionPoint.rotation, referencePoint.rotation, Time.deltaTime * speed);
+            objectToGrab.transform.rotation = Quaternion.Lerp(this.transform.rotation, objectToGrab.grabHandle.rotation, Time.deltaTime * 1);
+            newPoint = objectToGrab.grabHandle;
+        }
+        else
+        {
+            newPoint = this.transform;
+        }
+
+        interactionPoint.SetParent(null);
+        interactionPoint.position = newPoint.position;
+        interactionPoint.rotation = newPoint.rotation;
+        interactionPoint.SetParent(objectToGrab.transform);
+    }
+
+    public void SetTransitionGuide(Transform guidePoint)
+    {
+        if (guidePoint)
+        {
+            transitionGuide.SetPositionAndRotation(guidePoint.position, guidePoint.rotation);
+
+            if (grabbedObject)
+            {
+                grabbedObject.transform.SetParent(transitionGuide);
+            }
+        }
+        else
+        {
+            if (grabbedObject)
+            {
+                grabbedObject.transform.SetParent(null);
+            }
         }
     }
-    
+
+
+
+
+    public void ReleaseObject()
+    {
+        if (grabbedObject)
+        {
+            grabbedObject.Release();
+            grabbedObject = null;
+        }
+    }
+
+
+
+
+    private float GetDistance(Transform a, Transform b)
+    {
+        return Vector3.Magnitude(a.position - b.position);
+    }
+
+
+
 
     private void OnTriggerEnter(Collider other)
     {
@@ -396,6 +365,17 @@ public class ManipulatorController : MonoBehaviour {
         return availableObjects.Contains(objectToCheck);
     }
 
+    public Transform GetTransitionGuide()
+    {
+        return transitionGuide;
+    }
+
 
     // setters
+
+    public void SetMoveTarget(Transform newTarget)
+    {
+        moveTarget = newTarget;
+    }
+    
 }

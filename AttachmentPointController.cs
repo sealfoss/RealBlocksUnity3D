@@ -6,16 +6,13 @@ public class AttachmentPointController : MonoBehaviour {
 
     // public variables for configuring the attachment point
     public string attachmentTypeName = "";
-    public float attachDistance = 0.01f;
-    public float disengagementDistance = 0.1f;
 
     // trigger stuff
     private InteractiveObjectController owningObject;
-    private InteractiveObjectController attachingObject;
-    private ManipulatorController attachingController;
-    private AttachmentTriggerController attachingTrigger;
-    private bool activated;
-    private bool attachStop;
+    public InteractiveObjectController attachingObject;
+    public ManipulatorController attachingController;
+    public AttachmentTriggerController attachingTrigger;
+    public bool activated;
 
     //tracking stuff
     public Transform controllerTracker;
@@ -23,7 +20,15 @@ public class AttachmentPointController : MonoBehaviour {
     public Transform objectGuide;
     public float transitionMoveSpeed = 1;
     public float transitionRotateSpeed = 1;
-    private Quaternion inlineRotation;
+
+    // new stuff
+    public bool attachStop;
+    public float attachStopReset = 0.025f;
+    public float attachPositionThreshold = 0.1f;
+    public float attachRotationThreshold = 1.0f;
+    public float attachDistance = 0.01f;
+    public float disengagementDistance = 0.09f;
+
 
 	// Use this for initialization
 	void Start () {
@@ -35,160 +40,175 @@ public class AttachmentPointController : MonoBehaviour {
 		if(activated)
         {
             TrackController();
+            TransitionMoveObject();
+
+            if (DetectDeactivation())
+            {
+                Deactivate();
+            }
+            else if(DetectAttach())
+            {
+                AttachObject();
+            }
         }
 	}
+
+
+
+    private void TrackController()
+    {
+        controllerTracker.position = attachingController.transform.position;
+        controllerTracker.localPosition = new Vector3(0, controllerTracker.localPosition.y, 0);
+    }
+
+
+
+    private void TransitionMoveObject()
+    {
+        objectGuide.position = Vector3.Lerp(objectGuide.position, trackerOffset.position, transitionMoveSpeed * Time.deltaTime);
+        objectGuide.rotation = Quaternion.Lerp(objectGuide.rotation, trackerOffset.rotation, transitionRotateSpeed * Time.deltaTime);
+
+        if (objectGuide.localPosition.y < attachDistance)
+        {
+            objectGuide.localPosition = new Vector3(objectGuide.localPosition.x, attachDistance, objectGuide.localPosition.z);
+        }
+    }
+
 
     private bool DetectDeactivation()
     {
         bool deactivate = false;
+        // detach if...
 
-        if(!attachingObject.GetGrabbed())
+        if (!attachingObject.GetGrabbed()) // if the attaching object isn't grabbed
         {
             deactivate = true;
         }
-        else if(owningObject.grabbable)
+        else if (owningObject.grabbable) // if the owning object is grabbable, and isn't currently grabbed or attached
         {
-            if(!owningObject.GetGrabbed() && !owningObject.GetAttached())
+            if (!owningObject.GetGrabbed() && !owningObject.GetAttached())
             {
                 deactivate = true;
             }
         }
 
+        if (GetDistance(attachingTrigger.transform, this.transform) > disengagementDistance) // or if the attaching object is beyond the disengagement distance
+        {
+            deactivate = true;
+        }
+
         return deactivate;
     }
 
-    private void TrackController()
+
+
+    private bool DetectAttach()
     {
-        if (DetectDeactivation())
+        bool attach = false;
+
+        if (attachStop)
         {
-            Deactivate();
-        }
-        else
-        {
-            controllerTracker.position = attachingController.transform.position;
-            controllerTracker.localPosition = new Vector3(0, controllerTracker.localPosition.y, 0);
-            //controllerTracker.localRotation = Quaternion.Euler(new Vector3(0, attachingController.transform.localEulerAngles.z, 0)); // to control twist, if you want it.
-            //Debug.Log("guide local y: " + objectGuide.localPosition.y);
-            TransitionGuide();
-            
-            if(!attachStop && objectGuide.localPosition.y <= attachDistance)
-            {
-                attachStop = true;
-                AttachObject();
-            }
-            else if(attachStop && objectGuide.localPosition.y > attachDistance)
+            if(objectGuide.localPosition.y >= attachStopReset)
             {
                 attachStop = false;
             }
-            else if(objectGuide.localPosition.y >= disengagementDistance)
+        }
+        else
+        {
+            if (objectGuide.localPosition.y <= attachDistance)
             {
-                Deactivate();
+                if (GetDistance(objectGuide, trackerOffset) < attachPositionThreshold
+                    && Quaternion.Angle(objectGuide.rotation, trackerOffset.rotation) < attachRotationThreshold)
+                {
+                    attach = true;
+                }
             }
         }
-    }
 
-    private float GetDistance(Transform a, Transform b)
-    {
-        return Vector3.Magnitude(a.position - b.position);
-    }
-
-    private void SetInlineRotation()
-    {
-        float y = objectGuide.localEulerAngles.y;
-        float mod = y % 90;
-        float inline = y - mod;
-
-        if(mod >= 45)
-        {
-            inline += 90;
-        }
-
-        inlineRotation = Quaternion.Euler(new Vector3(0, inline, 0));
-    }
-
-    private void TransitionGuide()
-    {
-        objectGuide.position = Vector3.Lerp(objectGuide.transform.position, trackerOffset.position, Time.deltaTime * transitionMoveSpeed);
-        //objectGuide.rotation = Quaternion.Lerp(objectGuide.rotation, trackerOffset.rotation, Time.deltaTime * transitionRotateSpeed); // if not using inline rotation.
-        objectGuide.localRotation = Quaternion.Lerp(objectGuide.localRotation, inlineRotation, Time.deltaTime * transitionRotateSpeed);
+        return attach;
     }
     
-    
 
-    public void Activate(InteractiveObjectController activatingObject, AttachmentTriggerController activatingTrigger)
+
+    public void Activate(AttachmentTriggerController trigger)
     {
-        attachingObject = activatingObject;
-        attachingController = attachingObject.GetAttachedController();
-        attachingObject.SetActivated(true);
-        owningObject.SetActivated(true);
+        //Debug.Log("Activating!");
 
-        if (activatingTrigger != null)
+        attachingTrigger = trigger;
+        attachingObject = GetAttachingObject(attachingTrigger);
+        attachingController = GetAttachingController(attachingTrigger);
+
+        if(attachingController && attachingObject && attachingController)
         {
-            attachingTrigger = activatingTrigger;
+            Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), true);
+            attachingObject.SetMoveMode(0);
+
+            SetInitialTrackingPositions();
+            attachingObject.transform.SetParent(objectGuide);
+
+            attachingObject.busy = true;
+            owningObject.busy = true;
+            activated = true;
         }
+
         
-        controllerTracker.position = attachingController.transform.position;
-        controllerTracker.localPosition = new Vector3(0, controllerTracker.localPosition.y, 0);
-
-        trackerOffset.position = attachingObject.transform.position;
-        trackerOffset.localPosition = new Vector3(0, trackerOffset.localPosition.y, 0);
-
-        objectGuide.position = attachingTrigger.transform.position;
-        objectGuide.rotation = attachingTrigger.transform.rotation;
-        SetInlineRotation();
-
-        attachingObject.transform.SetParent(objectGuide);
-        attachingObject.moveMode = 0;
-        attachingObject.PhysicsOff();
-
-        activated = true;
-        //Debug.Log("ACTIVATED!");
     }
+    
+
+
+    public void ReActivate()
+    {
+        //Debug.Log("ReActivating!");
+
+        owningObject.busy = true;
+        activated = true;
+        attachingObject.busy = true;
+
+        Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), true);
+        attachingObject.SetMoveMode(0);
+
+        SetInitialTrackingPositions();
+        attachingObject.transform.SetParent(objectGuide);
+    }
+
 
     private void Deactivate()
     {
-        attachingObject.transform.SetParent(null);
-        attachingObject.PhysicsOn();
-        attachingObject.moveMode = 1;
+        //Debug.Log("Deactivating!");
 
-        attachingController.ReleaseObject();
-        attachingController.GrabObject(attachingObject);
-
-        owningObject.SetActivated(false);
-        attachingObject.SetActivated(false);
-
-        attachingObject = null;
-        attachingController = null;
-
+        attachingObject.busy = false;
+        owningObject.busy = false;
         activated = false;
         attachStop = false;
-        //Debug.Log("DEACTIVATED!");
+        attachingObject.SetMoveMode(1);
+        Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), false);
     }
+
+
 
     private void AttachObject()
     {
-        objectGuide.position = this.transform.position;
-        objectGuide.localRotation = inlineRotation;
-        
-        attachingObject.SetActivated(false);
-        owningObject.SetActivated(false);
+        Debug.Log("Attaching!");
         activated = false;
-
+        attachingController.GetTransitionGuide().SetPositionAndRotation(this.transform.position, this.transform.rotation);
+        objectGuide.SetPositionAndRotation(this.transform.position, trackerOffset.rotation);
+        owningObject.busy = false;
+        attachingObject.busy = false;
+        attachingObject.AttachTo(owningObject, this);
         attachingController.ReleaseObject();
-        attachingObject.AttachTo(this.owningObject, this);
+        attachStop = true;
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if(owningObject && !owningObject.GetActivated() && (!owningObject.grabbable || owningObject.GetGrabbed() || owningObject.GetAttached()))
+        if (!activated && !owningObject.busy)
         {
             AttachmentTriggerController otherTrigger = other.GetComponent<AttachmentTriggerController>();
 
             if (otherTrigger && otherTrigger.attachmentTypeName == this.attachmentTypeName
-                && !otherTrigger.GetOwningObject().GetActivated() && otherTrigger.GetOwningObject().GetGrabbed())
+                && !owningObject.attachedObjects.Contains(otherTrigger.GetOwningObject()) && otherTrigger.CheckReadyToAttach())
             {
-                //Debug.Log("Attachment detected!");
-                Activate(otherTrigger.GetOwningObject(), otherTrigger);
+                Activate(otherTrigger);
             }
         }
     }
@@ -196,8 +216,81 @@ public class AttachmentPointController : MonoBehaviour {
 
     // getters
 
+    private InteractiveObjectController GetAttachingObject(AttachmentTriggerController trigger)
+    {
+        InteractiveObjectController attaching = trigger.GetOwningObject();
+
+        if (attaching.rootObject)
+        {
+            Debug.Log("Setting attaching object to object root!.");
+            attaching = attaching.rootObject;
+        }
+
+        return attaching;
+    }
+
+    private ManipulatorController GetAttachingController(AttachmentTriggerController trigger)
+    {
+        ManipulatorController controller = null;
+        InteractiveObjectController triggerOwner = trigger.GetOwningObject();
+
+        if(triggerOwner.attached)
+        {
+            controller = triggerOwner.rootObject.GetAttachedController();
+        }
+        else
+        {
+            controller = triggerOwner.GetAttachedController();
+        }
+
+        return controller;
+    }
+
+    public AttachmentTriggerController GetAttachingTrigger()
+    {
+        return attachingTrigger;
+    }
+
     public Transform GetGuide()
     {
         return objectGuide;
     }
+
+    private float GetDistance(Transform a, Transform b)
+    {
+        return Vector3.Magnitude(a.position - b.position);
+    }
+    
+
+
+    private Quaternion GetLocalInlineRotation(Transform otherObject)
+    {
+        float y = otherObject.localEulerAngles.y;
+        float mod = y % 90;
+        float inline = y - mod;
+
+        if (mod >= 45)
+        {
+            inline += 90;
+        }
+
+        return Quaternion.Euler(new Vector3(0, inline, 0));
+    }
+
+
+    private void SetInitialTrackingPositions()
+    {
+        controllerTracker.position = attachingController.transform.position;
+        controllerTracker.localPosition = new Vector3(0, controllerTracker.localPosition.y, 0);
+        objectGuide.SetPositionAndRotation(attachingTrigger.transform.position, attachingTrigger.transform.rotation);
+        trackerOffset.position = attachingObject.transform.position;
+        trackerOffset.localPosition = new Vector3(0, trackerOffset.localPosition.y, 0);
+        trackerOffset.localRotation = GetLocalInlineRotation(objectGuide);
+    }
+
+
+
+
+    // old stuff, probably useless
+
 }

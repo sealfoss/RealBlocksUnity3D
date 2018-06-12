@@ -11,7 +11,7 @@ public class InteractiveObjectController : MonoBehaviour {
     public bool grabbable = true;
 
     public bool grabbed; // lets the system know this object is grabbed
-    public bool activated; // lest the system know this object is in the middle of attaching or detaching, and shouldn't trigger anything else
+    public bool busy; // lest the system know this object is in the middle of attaching or detaching, and shouldn't trigger anything else
     public ObjectHighlightController highlight;
 
     // attachment stuff
@@ -20,10 +20,12 @@ public class InteractiveObjectController : MonoBehaviour {
     public InteractiveObjectController parentObject; // object this object is attached to
     public HashSet<InteractiveObjectController> attachedObjects;
     private AttachmentPointController parentAttachmentPoint; // the attachment point used by the object to attach to its parentObject
+    //public float attachDistance = 0.01f;
+    //public float disengagementDistance = 0.1f;
 
     // grabbed move stuff
     private float mass;
-    public int moveMode = 1;
+    private int moveMode = 1; // 0 for attached, 1 for physics move, 2 for transition move, -1 for dead (i guess?)
     public float velocityFactor = 2000;
     private float calculatedVelocityFactor;
     public float rotationFactor = 80;
@@ -150,19 +152,6 @@ public class InteractiveObjectController : MonoBehaviour {
         grabbed = false;
     }
 
-
-    public void PhysicsOff()
-    {
-        rigidBody.isKinematic = true;
-        this.GetComponent<Collider>().isTrigger = true;
-    }
-
-    public void PhysicsOn()
-    {
-        this.GetComponent<Collider>().isTrigger = false;
-        rigidBody.isKinematic = false;
-    }
-
     public void AttachTo(InteractiveObjectController otherObject, AttachmentPointController attachmentPoint)
     {
         parentObject = otherObject;
@@ -206,7 +195,6 @@ public class InteractiveObjectController : MonoBehaviour {
         this.transform.SetParent(parentAttachmentPoint.GetGuide()); // reparent to attachment point guide
         this.gameObject.AddComponent<Rigidbody>();
         rigidBody = GetComponent<Rigidbody>(); // reset the local variable for the object's rigid body
-        this.PhysicsOff(); // turn off physics
         rigidBody.mass = mass; // set the rigid body's mass to the stored value
 
         if (parentObject.grabbable)
@@ -222,7 +210,7 @@ public class InteractiveObjectController : MonoBehaviour {
         AttachmentPointController temp = parentAttachmentPoint; // temp reference for the attachment point that will be deleted once out of scope
         parentAttachmentPoint = null; // get rid of the attachment point global
         Debug.Log("DETATCH!");
-        temp.Activate(this, null);  // reactivate the attachment point
+        temp.Activate(temp.GetAttachingTrigger());  // reactivate the attachment point
     }
 
     private void Reroot(InteractiveObjectController newRoot)
@@ -258,6 +246,28 @@ public class InteractiveObjectController : MonoBehaviour {
         }
     }
 
+    public void SetMoveMode(int mode)
+    {
+        switch (mode)
+        {
+            case 0:
+                if (rigidBody) { rigidBody.isKinematic = true; }
+                break;
+
+            case 1:
+                rigidBody.isKinematic = false;
+                this.transform.SetParent(null);
+                break;
+
+            default:
+                Debug.Log("ERROR: " + this.name + " set to invalid move mode.");
+                break;
+        }
+
+        moveMode = mode;
+    }
+
+
     // getters
 
     public ManipulatorController GetAttachedController()
@@ -284,11 +294,7 @@ public class InteractiveObjectController : MonoBehaviour {
     {
         return attached;
     }
-
-    public bool GetActivated()
-    {
-        return activated;
-    }
+    
 
     public InteractiveObjectController GetRootObject()
     {
@@ -315,12 +321,13 @@ public class InteractiveObjectController : MonoBehaviour {
         return attachedObjects;
     }
 
-    // setters
-
-    public void SetActivated(bool active)
+    public int GetMoveMode()
     {
-        activated = active;
+        return moveMode;
     }
+
+    // setters
+    
 
     public void SetMass(float newMass)
     {

@@ -51,4 +51,25 @@ public class AttachmentTriggerController : MonoBehaviour {
         return pairedAttachmentPoint;
     }
 
+    public bool CheckReadyToAttach()
+    {
+        bool ready = false;
+
+        if (!owningObject.busy)
+        {
+            if (owningObject.grabbed)
+            {
+                ready = true;
+            }
+            else if (owningObject.rootObject)
+            {
+                if (owningObject.rootObject.grabbed && !owningObject.rootObject.busy)
+                {
+                    //ready = true;
+                }
+            }
+        }
+
+        return ready;
+    }
 }
