@@ -188,7 +188,7 @@ public class AttachmentPointController : MonoBehaviour {
 
     private void AttachObject()
     {
-        Debug.Log("Attaching!");
+        //Debug.Log("Attaching!");
         activated = false;
         attachingController.GetTransitionGuide().SetPositionAndRotation(this.transform.position, this.transform.rotation);
         objectGuide.SetPositionAndRotation(this.transform.position, trackerOffset.rotation);

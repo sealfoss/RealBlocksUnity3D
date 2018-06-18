@@ -28,7 +28,7 @@ public class BlockFloorController : MonoBehaviour {
 
         if (spawnedObjects.Count < minimumSpawnedBlocks)
         {
-            Debug.Log("BELOW MINIMUM!");
+            //Debug.Log("BELOW MINIMUM!");
             for (int i = 0; i < minimumSpawnedBlocks; i++)
             {
                 spawner.SpawnRandom();

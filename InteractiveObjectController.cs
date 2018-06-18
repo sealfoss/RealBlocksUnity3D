@@ -20,8 +20,7 @@ public class InteractiveObjectController : MonoBehaviour {
     public InteractiveObjectController parentObject; // object this object is attached to
     public HashSet<InteractiveObjectController> attachedObjects;
     private AttachmentPointController parentAttachmentPoint; // the attachment point used by the object to attach to its parentObject
-    //public float attachDistance = 0.01f;
-    //public float disengagementDistance = 0.1f;
+    public int attachmentHeight;
 
     // grabbed move stuff
     private float mass;
@@ -187,7 +186,8 @@ public class InteractiveObjectController : MonoBehaviour {
         
 
         attached = true;
-        Debug.Log(this.name + " attached to " + parentObject.name + ", with root object " + rootObject.name);
+        rootObject.attachmentHeight = GetHeight(rootObject);
+        //Debug.Log(this.name + " attached to " + parentObject.name + ", with root object " + rootObject.name);
     }
 
     public void Detach()
@@ -203,13 +203,15 @@ public class InteractiveObjectController : MonoBehaviour {
         }
 
         parentObject.attachedObjects.Remove(this); // remove this object from the parent object's attached objects group
+        rootObject.attachmentHeight = GetHeight(rootObject); // have the root object reevaluate its height, before you delete its reference from this object
+
         rootObject = null; // we're detaching here, there is no more root object (this object is root)
         parentObject = null; // we're detaching here, there is no more parent object (this object is its own parent)
         Reroot(this); // reroot all of this object's attached objects to this object
         attached = false; // this object is no longer attached
+
         AttachmentPointController temp = parentAttachmentPoint; // temp reference for the attachment point that will be deleted once out of scope
         parentAttachmentPoint = null; // get rid of the attachment point global
-        Debug.Log("DETATCH!");
         temp.Activate(temp.GetAttachingTrigger());  // reactivate the attachment point
     }
 
@@ -266,6 +268,30 @@ public class InteractiveObjectController : MonoBehaviour {
 
         moveMode = mode;
     }
+
+
+
+    private int GetHeight(InteractiveObjectController obj)
+    {
+        int height = 0;
+
+        if (obj.attachedObjects.Count > 0)
+        {
+            foreach (InteractiveObjectController childObj in attachedObjects)
+            {
+                int childHeight = 1 + GetHeight(childObj);
+
+                if (childHeight > height)
+                {
+                    height = childHeight;
+                }
+            }
+        }
+
+        Debug.Log("Returning height of: " + height);
+        return height;
+    }
+
 
 
     // getters
