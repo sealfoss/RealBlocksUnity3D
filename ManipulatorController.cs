@@ -44,9 +44,6 @@ public class ManipulatorController : MonoBehaviour {
 	
 	// Update is called once per frame
 	void FixedUpdate () {
-
-        // check if there are any available objects.
-        FindClosestAvailableObject();
         
         // grip button stuff
         if (controller.gripped)
@@ -61,14 +58,20 @@ public class ManipulatorController : MonoBehaviour {
                 grabStop = true;
             }
         }
-        else if(grabbedObject)
+        else
         {
-            ReleaseObject();
-            grabStop = false;
-        }
-        else if(grabStop)
-        {
-            grabStop = false;
+            if (grabbedObject)
+            {
+                ReleaseObject();
+            }
+
+            if (grabStop)
+            {
+                grabStop = false;
+            }
+            
+            // check if there are any available objects.
+            FindClosestAvailableObject();
         }
 
         // trigger stuff
@@ -101,7 +104,20 @@ public class ManipulatorController : MonoBehaviour {
 
     // helpers
 
+    private void SetGrabbed(InteractiveObjectController newGrabbed)
+    {
+        grabbedObject = newGrabbed;
+    }
 
+    private void SetClosest(InteractiveObjectController newClosest)
+    {
+        closestObject = newClosest;
+
+        if(closestObject)
+        {
+            closestObject.SelectThisObject(this);
+        }
+    }
 
     private void FindClosestAvailableObject()
     {
@@ -122,13 +138,13 @@ public class ManipulatorController : MonoBehaviour {
                     closestDistance = currentDistance;
                     newClosestObject = item;
                 }
-                
-                closestObject = newClosestObject;
+
+                SetClosest(newClosestObject);
             }
         }
         else if (closestObject)
         {
-            closestObject = null;
+            SetClosest(null);
         }
     }
 
@@ -156,7 +172,7 @@ public class ManipulatorController : MonoBehaviour {
             
             SetInteractionPoint(objectToGrab); // if the object has a grab handle, grab it by that. otherwise, grab it by the position the controller is current in relative to the object
             SetMoveTarget(this.transform); // set the move target to the grabbing hand
-            grabbedObject = objectToGrab;
+            SetGrabbed(objectToGrab);
             grabbedObject.Grab(this);
         }
     }
@@ -241,12 +257,7 @@ public class ManipulatorController : MonoBehaviour {
         transitionGuide.position = Vector3.Lerp(transitionGuide.position, moveTarget.position, Time.deltaTime * transitionRate);
         transitionGuide.rotation = Quaternion.Lerp(transitionGuide.rotation, moveTarget.rotation, Time.deltaTime * transitionRate);
     }
-
-
-
-
-
-
+    
 
 
     public void SetInteractionPoint(InteractiveObjectController objectToGrab)
@@ -297,7 +308,8 @@ public class ManipulatorController : MonoBehaviour {
         if (grabbedObject)
         {
             grabbedObject.Release();
-            grabbedObject = null;
+
+            SetGrabbed(null);
         }
     }
 

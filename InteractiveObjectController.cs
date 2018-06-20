@@ -53,84 +53,76 @@ public class InteractiveObjectController : MonoBehaviour {
     // Update is called once per frame
     void FixedUpdate()
     {
-        if (grabbed || highlight.highlightOn || availableControllers.Count > 0)
-        {
-            CheckHighlight();
-        }
-
-        if (grabbed)
-        {
-            //Debug.Log("Controller Distance: " + Vector3.Magnitude(this.transform.position - attachedController.transform.position));
-
-            if (!attachedController.IsAvailableToController(this) && CheckTooFarFromController())
-            {
-                //attachedController.ReleaseObject();
-            }
-        }
+        DetectHighlight();
     }
 
     // helpers
 
-    private void CheckHighlight()
+    private void DetectHighlight()
     {
         if(grabbed)
         {
-            if (!highlight.highlightOn)
+            if(!highlight.highlightGrabbed || !highlight.highlightOn)
             {
-                highlight.SetHighlightOn(false);
-            }
-
-            if(!highlight.highlightGrabbed)
-            {
-                highlight.SetHighlightGrabbed(false);
+                highlight.SetHighlightGrabbed(true);
             }
         }
-        else
+        else if(availableControllers.Count > 0)
         {
-            if (!highlight.highlightSelected)
-            {
-                highlight.SetHighlightSelected(false);
-            }
+            HashSet<ManipulatorController> toRemove = new HashSet<ManipulatorController>();
 
-            bool selected = false;
-
-            foreach (ManipulatorController controller in availableControllers)
+            foreach(ManipulatorController manipulator in availableControllers)
             {
-                if(controller.GetClosest() == this)
+                if(manipulator.GetClosest() != this)
                 {
-                    selected = true;
-                    break;
+                    toRemove.Add(manipulator);
                 }
             }
 
-            if(selected)
+            if(toRemove.Count > 0)
             {
-                if (!highlight.highlightOn)
+                foreach(ManipulatorController manipuator in toRemove)
                 {
-                    highlight.SetHighlightOn(false);
+                    availableControllers.Remove(manipuator);
+                }
+            }
+
+            if(availableControllers.Count > 0)
+            {
+                if(!highlight.highlightSelected || !highlight.highlightOn)
+                {
+                    highlight.SetHighlightSelected(true);
                 }
             }
             else
             {
                 if(highlight.highlightOn)
                 {
-                    highlight.SetHighlightOff(false);
+                    highlight.SetHighlightOff(true);
                 }
+            }
+        }
+        else if(highlight.highlightOn)
+        {
+            highlight.SetHighlightOff(true);
+        }
+
+        if(parentObject && parentObject.highlight.highlightOn)
+        {
+            if(parentObject.highlight.highlightSelected && (!highlight.highlightOn || highlight.highlightGrabbed))
+            {
+                highlight.SetHighlightSelected(true);
+            }
+            else if (parentObject.highlight.highlightGrabbed && (!highlight.highlightOn || highlight.highlightSelected))
+            {
+                highlight.SetHighlightGrabbed(true);
             }
         }
     }
 
-
-    private bool CheckTooFarFromController()
+    public void SelectThisObject(ManipulatorController controller)
     {
-        if(Vector3.Magnitude(this.transform.position - attachedController.transform.position) >= maxGrabDistance)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        availableControllers.Add(controller);
     }
 
     private void CalculateMovementFactors()
@@ -151,42 +143,54 @@ public class InteractiveObjectController : MonoBehaviour {
         grabbed = false;
     }
 
+    public void AddObjects(InteractiveObjectController objectToAdd)
+    {
+        attachedObjects.Add(objectToAdd);
+
+        if (objectToAdd.attachedObjects.Count > 0)
+        {
+            foreach (InteractiveObjectController obj in objectToAdd.attachedObjects)
+            {
+                attachedObjects.Add(obj);
+            }
+        }
+
+        if(parentObject)
+        {
+            parentObject.AddObjects(objectToAdd);
+        }
+    }
+
+    public void RemoveObjects(InteractiveObjectController objectToRemove)
+    {
+        attachedObjects.Remove(objectToRemove);
+
+        if (objectToRemove.attachedObjects.Count > 0)
+        {
+            foreach (InteractiveObjectController obj in objectToRemove.attachedObjects)
+            {
+                attachedObjects.Remove(obj);
+            }
+        }
+
+        if(parentObject)
+        {
+            parentObject.RemoveObjects(objectToRemove);
+        }
+    }
+
+
     public void AttachTo(InteractiveObjectController otherObject, AttachmentPointController attachmentPoint)
     {
         parentObject = otherObject;
-        parentObject.attachedObjects.Add(this);
         parentAttachmentPoint = attachmentPoint;
-        
-        if(parentObject.rootObject)
-        {
-            rootObject = parentObject.rootObject;
-        }
-        else if(parentObject.grabbable)
-        {
-            rootObject = parentObject;
-        }
-        else
-        {
-            rootObject = this;
-        }
-        
-        if(attachedObjects.Count > 0)
-        {
-            Reroot(rootObject);
-        }
-
+        parentObject.AddObjects(this);
+        Reroot(FindRoot(parentObject));
+        parentObject.AddObjects(this);
         Destroy(this.GetComponent<Rigidbody>());
         this.GetComponent<Collider>().isTrigger = false;
-        this.transform.SetParent(rootObject.transform);
-
-        if(parentObject.grabbable)
-        {
-            parentObject.AddMass(this.mass);
-        }
-        
-
+        parentObject.AddMass(mass);
         attached = true;
-        rootObject.attachmentHeight = GetHeight(rootObject);
         //Debug.Log(this.name + " attached to " + parentObject.name + ", with root object " + rootObject.name);
     }
 
@@ -196,14 +200,8 @@ public class InteractiveObjectController : MonoBehaviour {
         this.gameObject.AddComponent<Rigidbody>();
         rigidBody = GetComponent<Rigidbody>(); // reset the local variable for the object's rigid body
         rigidBody.mass = mass; // set the rigid body's mass to the stored value
-
-        if (parentObject.grabbable)
-        {
-            parentObject.SubtractMass(mass); // remove this object's mass from the mass of the parent (and its parents)
-        }
-
-        parentObject.attachedObjects.Remove(this); // remove this object from the parent object's attached objects group
-        rootObject.attachmentHeight = GetHeight(rootObject); // have the root object reevaluate its height, before you delete its reference from this object
+        parentObject.RemoveObjects(this); // remove this object from the parent object's attached objects group
+        parentObject.SubtractMass(mass);
 
         rootObject = null; // we're detaching here, there is no more root object (this object is root)
         parentObject = null; // we're detaching here, there is no more parent object (this object is its own parent)
@@ -215,38 +213,44 @@ public class InteractiveObjectController : MonoBehaviour {
         temp.Activate(temp.GetAttachingTrigger());  // reactivate the attachment point
     }
 
+    private InteractiveObjectController FindRoot(InteractiveObjectController otherObject)
+    {
+        InteractiveObjectController newRoot = null;
+
+        if (otherObject.rootObject)
+        {
+            newRoot = parentObject.rootObject;
+        }
+        else if (otherObject.grabbable)
+        {
+            newRoot = parentObject;
+        }
+        else
+        {
+            newRoot = this;
+        }
+
+        return newRoot;
+    }
+
     private void Reroot(InteractiveObjectController newRoot)
     {
-        foreach(InteractiveObjectController item in attachedObjects)
-        {
-            item.rootObject = newRoot;
+        this.rootObject = newRoot;
 
-            if(item.attachedObjects.Count > 0)
+        if (rootObject != this)
+        {
+            this.transform.SetParent(rootObject.transform);
+        }
+
+        if (attachedObjects.Count > 0)
+        {
+            foreach (InteractiveObjectController attached in attachedObjects)
             {
-                item.Reroot(newRoot);
+                attached.Reroot(rootObject);
             }
         }
     }
 
-    private void OnTriggerEnter(Collider other)
-    {
-        ManipulatorController otherController = other.GetComponent<ManipulatorController>();
-
-        if(otherController)
-        {
-            availableControllers.Add(otherController);
-        }
-    }
-
-    private void OnTriggerExit(Collider other)
-    {
-        ManipulatorController otherController = other.GetComponent<ManipulatorController>();
-
-        if (otherController)
-        {
-            availableControllers.Remove(otherController);
-        }
-    }
 
     public void SetMoveMode(int mode)
     {
@@ -270,27 +274,7 @@ public class InteractiveObjectController : MonoBehaviour {
     }
 
 
-
-    private int GetHeight(InteractiveObjectController obj)
-    {
-        int height = 0;
-
-        if (obj.attachedObjects.Count > 0)
-        {
-            foreach (InteractiveObjectController childObj in attachedObjects)
-            {
-                int childHeight = 1 + GetHeight(childObj);
-
-                if (childHeight > height)
-                {
-                    height = childHeight;
-                }
-            }
-        }
-
-        Debug.Log("Returning height of: " + height);
-        return height;
-    }
+    
 
 
 
@@ -326,11 +310,7 @@ public class InteractiveObjectController : MonoBehaviour {
     {
         return rootObject;
     }
-
-    public float GetMass()
-    {
-        return mass;
-    }
+    
 
     public float GetCalculatedVelocityFactor()
     {
@@ -353,45 +333,61 @@ public class InteractiveObjectController : MonoBehaviour {
         return moveMode;
     }
 
-    // setters
-    
+   
 
-    public void SetMass(float newMass)
-    {
-        rigidBody.mass = newMass;
-        mass = rigidBody.mass;
-        CalculateMovementFactors();   
-    }
+    // setters
 
     public void AddMass(float massToAdd)
     {
         mass += massToAdd;
 
-        if(parentObject)
+        if(GetComponent<Rigidbody>())
         {
-            parentObject.AddMass(mass);
-        }
-        else if(GetComponent<Rigidbody>())
-        {
-            rigidBody.mass = mass;
+            GetComponent<Rigidbody>().mass = mass;
         }
 
         CalculateMovementFactors();
+
+        if (parentObject)
+        {
+            parentObject.AddMass(massToAdd);
+        }
     }
 
     public void SubtractMass(float massToSubract)
     {
         mass -= massToSubract;
 
-        if(parentObject)
+        if (GetComponent<Rigidbody>())
         {
-            parentObject.SubtractMass(mass);
-        }
-        else if(GetComponent<Rigidbody>())
-        {
-            rigidBody.mass = mass;
+            GetComponent<Rigidbody>().mass = mass;
         }
 
         CalculateMovementFactors();
+
+        if (parentObject)
+        {
+            parentObject.SubtractMass(massToSubract);
+        }
     }
+
+    public void ResetCenterOfMass()
+    {
+        InteractiveObjectController objectToReset;
+
+        if (rootObject)
+        {
+            objectToReset = rootObject;
+        }
+        else
+        {
+            objectToReset = this;
+        }
+
+        if (objectToReset.GetComponent<Rigidbody>())
+        {
+            objectToReset.GetComponent<Rigidbody>().ResetCenterOfMass();
+        }
+    }
+    
 }

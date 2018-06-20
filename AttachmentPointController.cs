@@ -182,13 +182,14 @@ public class AttachmentPointController : MonoBehaviour {
         attachStop = false;
         attachingObject.SetMoveMode(1);
         Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), false);
+        owningObject.ResetCenterOfMass();
     }
 
 
 
     private void AttachObject()
     {
-        //Debug.Log("Attaching!");
+        ////Debug.Log("Attaching!");
         activated = false;
         attachingController.GetTransitionGuide().SetPositionAndRotation(this.transform.position, this.transform.rotation);
         objectGuide.SetPositionAndRotation(this.transform.position, trackerOffset.rotation);

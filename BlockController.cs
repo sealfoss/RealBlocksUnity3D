@@ -31,9 +31,6 @@ public class BlockController : MonoBehaviour {
 
     private Color GetRandomColor()
     {
-        float r = Random.Range(0.5f, 1.0f);
-        float g = Random.Range(0.5f, 1.0f);
-        float b = Random.Range(0.5f, 1.0f);
 
         Color rando = Random.ColorHSV(0, 1, 0.5f, 1, 0.75f, 1);
         return rando;

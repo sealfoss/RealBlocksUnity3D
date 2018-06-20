@@ -14,6 +14,7 @@ public class ObjectHighlightController : MonoBehaviour {
 
     private InteractiveObjectController owningObject;
     private Renderer rend;
+    private ManipulatorController selectingController;
 
 	// Use this for initialization
 	void Start () {
@@ -28,26 +29,9 @@ public class ObjectHighlightController : MonoBehaviour {
 	// Update is called once per frame
 	void FixedUpdate ()
     {
-        if(highlightOn && highlightSelected)
+        if(highlightOn)
         {
-            Collider[] overlappedColliders = Physics.OverlapSphere(this.transform.position, overlapSphereRadius);
-            bool overlappedController = false;
 
-            foreach(Collider overlapped in overlappedColliders)
-            {
-                ManipulatorController controller = overlapped.GetComponent<ManipulatorController>();
-
-                if(controller)
-                {
-                    overlappedController = true;
-                    break;
-                }
-            }
-
-            if(!overlappedController)
-            {
-                SetHighlightOff(false);
-            }
         }
 
 	}
@@ -56,38 +40,48 @@ public class ObjectHighlightController : MonoBehaviour {
     {
         if (!rend) { return; }
 
-        rend.material.color = grabbedColor;
+        if (!highlightOn) { SetHighlightOn(true); }
 
-        if (propagateToAttached && owningObject.GetAttachedObjects().Count > 0)
+        if (!highlightGrabbed)
         {
-            foreach (InteractiveObjectController obj in owningObject.GetAttachedObjects())
-            {
-                obj.highlight.SetHighlightGrabbed(propagateToAttached);
-            }
-        }
+            rend.material.color = grabbedColor;
 
-        highlightGrabbed = true;
-        highlightSelected = false;
-        highlightAttached = false;
+            if (propagateToAttached && owningObject.GetAttachedObjects().Count > 0)
+            {
+                foreach (InteractiveObjectController obj in owningObject.GetAttachedObjects())
+                {
+                    obj.highlight.SetHighlightGrabbed(propagateToAttached);
+                }
+            }
+
+            highlightGrabbed = true;
+            highlightSelected = false;
+            highlightAttached = false;
+        }
     }
 
     public void SetHighlightSelected(bool propagateToAttached)
     {
         if(!rend) { return; }
 
-        rend.material.color = selectedColor;
+        if(!highlightOn) { SetHighlightOn(true); }
 
-        if (propagateToAttached && owningObject.GetAttachedObjects().Count > 0)
+        if (!highlightSelected)
         {
-            foreach (InteractiveObjectController obj in owningObject.GetAttachedObjects())
-            {
-                obj.highlight.SetHighlightSelected(propagateToAttached);
-            }
-        }
+            rend.material.color = selectedColor;
 
-        highlightGrabbed = false;
-        highlightSelected = true;
-        highlightAttached = false;
+            if (propagateToAttached && owningObject.GetAttachedObjects().Count > 0)
+            {
+                foreach (InteractiveObjectController obj in owningObject.GetAttachedObjects())
+                {
+                    obj.highlight.SetHighlightSelected(propagateToAttached);
+                }
+            }
+
+            highlightGrabbed = false;
+            highlightSelected = true;
+            highlightAttached = false;
+        }
     }
 
     public void SetHighlightAttached(bool propagateToAttached)
