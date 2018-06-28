@@ -8,7 +8,7 @@ public class VRCharacterController : MonoBehaviour {
     public Transform positionMaster;
     public float rotateSpeedMultiplier = 1;
     public float moveSpeedMultiplier = 1;
-    public CapsuleCollider bodyCollider;
+    //public CapsuleCollider bodyCollider;
     public float bodyRadius = 0.8f;
 
     public int controllerIndex;
@@ -17,7 +17,7 @@ public class VRCharacterController : MonoBehaviour {
 
     // Use this for initialization
     void Start () {
-        bodyCollider.radius = bodyRadius;
+        //bodyCollider.radius = bodyRadius;
     }
 	
 	// Update is called once per frame
@@ -35,7 +35,7 @@ public class VRCharacterController : MonoBehaviour {
 
     public void SetBodyCollision()
     {
-        bodyCollider.height = headTransform.localPosition.y;
+        //bodyCollider.height = headTransform.localPosition.y;
         Vector3 bodyPosition = new Vector3(headTransform.localPosition.x, headTransform.localPosition.y / 2, headTransform.localPosition.z);
     }
 

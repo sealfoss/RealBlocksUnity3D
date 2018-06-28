@@ -32,7 +32,7 @@ public class AttachmentPointController : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
-        //owningObject = GetComponentInParent<InteractiveObjectController>();
+        if(attachStopReset == 0) { attachStopReset = 0.02f; }
     }
 	
 	// Update is called once per frame
