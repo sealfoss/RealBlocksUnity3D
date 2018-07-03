@@ -41,9 +41,19 @@ public class ManipulatorController : MonoBehaviour {
         transitionGuide = new GameObject().transform;
         transitionGuide.name = "Transition Guide" + controllerIndex;
     }
-	
-	// Update is called once per frame
-	void FixedUpdate () {
+
+    // Update is called once per frame
+    private void Update()
+    {
+        // controller pad stuff
+        if (controller.padPressed)
+        {
+            //Debug.Log(device.GetAxis().x + " " + device.GetAxis().y);
+            character.MoveBody(device.GetAxis().x, device.GetAxis().y);
+        }
+    }
+
+    void FixedUpdate () {
         
         // grip button stuff
         if (controller.gripped)
@@ -92,12 +102,7 @@ public class ManipulatorController : MonoBehaviour {
             triggerStop = false;
         }
 
-        // controller pad stuff
-        if (controller.padPressed)
-        {
-            //Debug.Log(device.GetAxis().x + " " + device.GetAxis().y);
-            character.MoveBody(device.GetAxis().x, device.GetAxis().y);
-        }
+       
         
     }
 
@@ -247,6 +252,10 @@ public class ManipulatorController : MonoBehaviour {
         if (angle != 0 && axis != Vector3.zero)
         {
             //set the object's angular velocity so that the object is rotating towards where it should be as a grabbed object
+            Vector3 angularVelocity = (Time.fixedDeltaTime * angle * axis) * grabbedObject.GetCalculatedRotationFactor();
+
+            // need to check to make sure angular and reg velocity aren't infinity or some other non valid value.
+
             rBody.angularVelocity = (Time.fixedDeltaTime * angle * axis) * grabbedObject.GetCalculatedRotationFactor();
         }
     }
@@ -328,7 +337,7 @@ public class ManipulatorController : MonoBehaviour {
     {
         InteractiveObjectController otherObject = other.GetComponent<InteractiveObjectController>();
         
-        if(otherObject && otherObject.grabbable)
+        if(otherObject && otherObject.grabbable && !availableObjects.Contains(otherObject))
         {
             availableObjects.Add(otherObject);
         }

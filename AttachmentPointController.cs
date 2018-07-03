@@ -13,6 +13,7 @@ public class AttachmentPointController : MonoBehaviour {
     public ManipulatorController attachingController;
     public AttachmentTriggerController attachingTrigger;
     public bool activated;
+    private AttachmentTriggerController overlappingTrigger;
 
     //tracking stuff
     public Transform controllerTracker;
@@ -140,7 +141,8 @@ public class AttachmentPointController : MonoBehaviour {
 
         if(attachingController && attachingObject && attachingController)
         {
-            Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), true);
+            attachingObject.GetComponent<BoxCollider>().isTrigger = true;
+            owningObject.IgnoreCollision(attachingObject.GetComponent<Collider>(), true);
             attachingObject.SetMoveMode(0);
 
             SetInitialTrackingPositions();
@@ -150,38 +152,19 @@ public class AttachmentPointController : MonoBehaviour {
             owningObject.busy = true;
             activated = true;
         }
-
-        
     }
+
     
-
-
-    public void ReActivate()
-    {
-        //Debug.Log("ReActivating!");
-
-        owningObject.busy = true;
-        activated = true;
-        attachingObject.busy = true;
-
-        Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), true);
-        attachingObject.SetMoveMode(0);
-
-        SetInitialTrackingPositions();
-        attachingObject.transform.SetParent(objectGuide);
-    }
-
-
-    private void Deactivate()
+    public void Deactivate()
     {
         //Debug.Log("Deactivating!");
-
         attachingObject.busy = false;
         owningObject.busy = false;
         activated = false;
         attachStop = false;
         attachingObject.SetMoveMode(1);
-        Physics.IgnoreCollision(owningObject.GetComponent<Collider>(), attachingObject.GetComponent<Collider>(), false);
+        attachingObject.GetComponent<BoxCollider>().isTrigger = false;
+        owningObject.IgnoreCollision(attachingObject.GetComponent<Collider>(), false);
         owningObject.ResetCenterOfMass();
     }
 
@@ -190,6 +173,7 @@ public class AttachmentPointController : MonoBehaviour {
     private void AttachObject()
     {
         ////Debug.Log("Attaching!");
+        //attachingObject.GetComponent<Collider>().isTrigger = false;
         activated = false;
         attachingController.GetTransitionGuide().SetPositionAndRotation(this.transform.position, this.transform.rotation);
         objectGuide.SetPositionAndRotation(this.transform.position, trackerOffset.rotation);
@@ -198,25 +182,52 @@ public class AttachmentPointController : MonoBehaviour {
         attachingObject.AttachTo(owningObject, this);
         attachingController.ReleaseObject();
         attachStop = true;
+        attachingObject.GetComponent<BoxCollider>().isTrigger = false;
+        owningObject.IgnoreCollision(attachingObject.GetComponent<Collider>(), false);
+        owningObject.ResetCenterOfMass();
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!activated && owningObject && !owningObject.busy)
-        {
-            AttachmentTriggerController otherTrigger = other.GetComponent<AttachmentTriggerController>();
+        AttachmentTriggerController otherTrigger = other.GetComponent<AttachmentTriggerController>();
 
-            if (otherTrigger && otherTrigger.attachmentTypeName == this.attachmentTypeName
-                && otherTrigger.GetOwningObject() && !owningObject.attachedObjects.Contains(otherTrigger.GetOwningObject()) 
-                && otherTrigger.CheckReadyToAttach())
+        if (otherTrigger && otherTrigger.attachmentTypeName == this.attachmentTypeName)
+        {
+            overlappingTrigger = otherTrigger;
+
+            if (!activated && owningObject && !owningObject.busy)
             {
-                Activate(otherTrigger);
+                if (otherTrigger.GetOwningObject() && !owningObject.attachedObjects.Contains(otherTrigger.GetOwningObject())
+                    && otherTrigger.CheckReadyToAttach())
+                {
+                    Activate(otherTrigger);
+                }
             }
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        AttachmentTriggerController otherTrigger = other.GetComponent<AttachmentTriggerController>();
+
+        if(otherTrigger && otherTrigger == overlappingTrigger)
+        {
+            overlappingTrigger = null;
         }
     }
 
 
     // getters
+
+    public AttachmentTriggerController GetOverlappingTrigger()
+    {
+        return overlappingTrigger;
+    }
+
+    public InteractiveObjectController GetOwningObject()
+    {
+        return owningObject;
+    }
 
     private InteractiveObjectController GetAttachingObject(AttachmentTriggerController trigger)
     {
@@ -224,7 +235,7 @@ public class AttachmentPointController : MonoBehaviour {
 
         if (attaching.rootObject)
         {
-            Debug.Log("Setting attaching object to object root!.");
+            //Debug.Log("Setting attaching object to object root!.");
             attaching = attaching.rootObject;
         }
 
@@ -289,6 +300,7 @@ public class AttachmentPointController : MonoBehaviour {
         trackerOffset.localPosition = new Vector3(0, trackerOffset.localPosition.y, 0);
         trackerOffset.localRotation = GetLocalInlineRotation(objectGuide);
     }
+
 
 
 

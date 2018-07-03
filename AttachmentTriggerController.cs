@@ -7,6 +7,7 @@ public class AttachmentTriggerController : MonoBehaviour {
     private bool activated;
     private AttachmentPointController pairedAttachmentPoint;
     public string attachmentTypeName = "";
+    private AttachmentPointController overlappingAttachmentPoint = null;
 
 	// Use this for initialization
 	void Start () {
@@ -71,5 +72,30 @@ public class AttachmentTriggerController : MonoBehaviour {
         }
 
         return ready;
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        AttachmentPointController attachmentPoint = other.GetComponent<AttachmentPointController>();
+
+        if(attachmentPoint)
+        {
+            overlappingAttachmentPoint = attachmentPoint;
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        AttachmentPointController attachmentPoint = other.GetComponent<AttachmentPointController>();
+
+        if (attachmentPoint && attachmentPoint == overlappingAttachmentPoint)
+        {
+            overlappingAttachmentPoint = null;
+        }
+    }
+
+    public AttachmentPointController GetOverlappingAttachmentPoint()
+    {
+        return overlappingAttachmentPoint;
     }
 }

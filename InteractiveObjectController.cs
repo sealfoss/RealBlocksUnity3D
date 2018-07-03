@@ -4,8 +4,10 @@ using UnityEngine;
 
 public class InteractiveObjectController : MonoBehaviour {
 
+    public Vector3 spawnPosition;
+
     // grabbing stuff
-    public HashSet<ManipulatorController> availableControllers; 
+    public HashSet<ManipulatorController> availableControllers = new HashSet<ManipulatorController>();
     public ManipulatorController attachedController; // the manipulator currently in control of this object
     private Rigidbody rigidBody;
     public bool grabbable = true;
@@ -18,12 +20,19 @@ public class InteractiveObjectController : MonoBehaviour {
     public bool attached;  // lets the system know this object is attached to another
     public InteractiveObjectController rootObject; // controlling object of all objects attached to each other
     public InteractiveObjectController parentObject; // object this object is attached to
-    public HashSet<InteractiveObjectController> attachedObjects;
-    private AttachmentPointController parentAttachmentPoint; // the attachment point used by the object to attach to its parentObject
+    public AttachmentPointController parentAttachmentPoint; // the attachment point used by the object to attach to its parentObject
     public int attachmentHeight;
+    public HashSet<InteractiveObjectController> parentObjects = new HashSet<InteractiveObjectController>(); // objects this object is attached to
+    //public List<InteractiveObjectController> parentObjects = new List<InteractiveObjectController>();
+    public HashSet<InteractiveObjectController> attachedObjects = new HashSet<InteractiveObjectController>(); // objects attached to this object
+    public AttachmentTriggerController[] triggers;
+    public AttachmentPointController[] attachmentPoints;
+    public float collisionDetachForce = 100.0f;
+    public float breakMomentum = 10.0f;
+    public CollisionTrackerController attachmentTracker;
 
     // grabbed move stuff
-    private float mass;
+    public float mass;
     private int moveMode = 1; // 0 for attached, 1 for physics move, 2 for transition move, -1 for dead (i guess?)
     public float velocityFactor = 2000;
     private float calculatedVelocityFactor;
@@ -38,8 +47,11 @@ public class InteractiveObjectController : MonoBehaviour {
     // Use this for initialization
     void Start()
     {
-        availableControllers = new HashSet<ManipulatorController>();
-        attachedObjects = new HashSet<InteractiveObjectController>();
+        spawnPosition = this.transform.position;
+
+        if (triggers.Length == 0) { triggers = GetComponentsInChildren<AttachmentTriggerController>(); }
+        if (attachmentPoints.Length == 0) { attachmentPoints = GetComponentsInChildren<AttachmentPointController>(); }
+
         attachedController = null;
         this.rigidBody = GetComponent<Rigidbody>();
         mass = rigidBody.mass;
@@ -53,10 +65,22 @@ public class InteractiveObjectController : MonoBehaviour {
     // Update is called once per frame
     void FixedUpdate()
     {
-        DetectHighlight();
+        //DetectHighlight();
     }
 
     // helpers
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        Vector3 collisionVelocity = collision.relativeVelocity;
+        float collisonMagnitude = collisionVelocity.magnitude;
+
+        if(collisonMagnitude >= collisionDetachForce)
+        {
+            Detach();
+            parentAttachmentPoint.Deactivate();
+        }
+    }
 
     private void DetectHighlight()
     {
@@ -163,17 +187,17 @@ public class InteractiveObjectController : MonoBehaviour {
 
     public void RemoveObjects(InteractiveObjectController objectToRemove)
     {
-        attachedObjects.Remove(objectToRemove);
+        this.attachedObjects.Remove(objectToRemove);
 
-        if (objectToRemove.attachedObjects.Count > 0)
+        if (this != objectToRemove && objectToRemove.attachedObjects.Count > 0)
         {
             foreach (InteractiveObjectController obj in objectToRemove.attachedObjects)
             {
-                attachedObjects.Remove(obj);
+                this.attachedObjects.Remove(obj);
             }
         }
 
-        if(parentObject)
+        if (parentObject)
         {
             parentObject.RemoveObjects(objectToRemove);
         }
@@ -184,25 +208,29 @@ public class InteractiveObjectController : MonoBehaviour {
     {
         parentObject = otherObject;
         parentAttachmentPoint = attachmentPoint;
-        parentObject.AddObjects(this);
+        //parentObject.AddObjects(this);
         Reroot(FindRoot(parentObject));
         parentObject.AddObjects(this);
         Destroy(this.GetComponent<Rigidbody>());
         this.GetComponent<Collider>().isTrigger = false;
-        parentObject.AddMass(mass);
+        //parentObject.AddMass(mass);
         attached = true;
         //Debug.Log(this.name + " attached to " + parentObject.name + ", with root object " + rootObject.name);
+        SetParents();
     }
 
     public void Detach()
     {
+        SetAttached();
+        //Reroot(FindRoot(parentObject));
+
         this.transform.SetParent(parentAttachmentPoint.GetGuide()); // reparent to attachment point guide
         this.gameObject.AddComponent<Rigidbody>();
         rigidBody = GetComponent<Rigidbody>(); // reset the local variable for the object's rigid body
         rigidBody.mass = mass; // set the rigid body's mass to the stored value
-        parentObject.RemoveObjects(this); // remove this object from the parent object's attached objects group
-        parentObject.SubtractMass(mass);
-
+        //parentObject.RemoveObjects(this); // remove this object from the parent object's attached objects group
+        //parentObject.SubtractMass(mass);
+        ClearParents();
         rootObject = null; // we're detaching here, there is no more root object (this object is root)
         parentObject = null; // we're detaching here, there is no more parent object (this object is its own parent)
         Reroot(this); // reroot all of this object's attached objects to this object
@@ -212,6 +240,112 @@ public class InteractiveObjectController : MonoBehaviour {
         parentAttachmentPoint = null; // get rid of the attachment point global
         temp.Activate(temp.GetAttachingTrigger());  // reactivate the attachment point
     }
+
+    private HashSet<InteractiveObjectController> SetAttached()
+    {
+        attachedObjects.Clear();
+        attachedObjects = attachmentTracker.GetAttachedObjects();
+
+        foreach (InteractiveObjectController attached in attachedObjects)
+        {
+            attached.transform.SetParent(this.transform);
+        }
+        
+        /**
+
+        foreach (AttachmentPointController attachmentPoint in attachmentPoints)
+        {
+
+            AttachmentTriggerController trigger = attachmentPoint.GetOverlappingTrigger();
+
+            if (trigger)
+            {
+                InteractiveObjectController attached = trigger.GetOwningObject();
+
+                if (attached && attached.attached && !attachedObjects.Contains(attached))
+                {
+                    attachedObjects.Add(attached);
+                    HashSet<InteractiveObjectController> newObjects = attached.SetAttached();
+
+                    foreach (InteractiveObjectController newObject in newObjects)
+                    {
+                        if (!attachedObjects.Contains(newObject))
+                        {
+                            attachedObjects.Add(newObject);
+                        }
+                    }
+                }
+            }
+        }
+
+        **/
+
+        return attachedObjects;
+        
+    }
+
+    private void SetParents()
+    {
+        //parentObjects.Clear();
+
+        foreach(AttachmentTriggerController trigger in triggers)
+        {
+            AttachmentPointController attachmentPoint = trigger.GetOverlappingAttachmentPoint();
+
+            if(attachmentPoint)
+            {
+                InteractiveObjectController newParent = attachmentPoint.GetOwningObject();
+
+                if(newParent && (newParent.grabbed || newParent.attached) && !parentObjects.Contains(newParent))
+                {
+                    newParent.AddObjects(this);
+                    newParent.AddMass(mass);
+                    parentObjects.Add(newParent);
+
+                    //Debug.Log("Object: " + this.name + " adding object: " + attachmentPoint.GetOwningObject().name + " as a parent object.");
+                    //Debug.Log("Parent objects count: " + parentObjects.Count);
+                }
+            }
+        }
+
+        if(attachedObjects.Count > 0)
+        {
+            foreach(InteractiveObjectController attached in attachedObjects)
+            {
+                attached.SetParents();
+            }
+        }
+
+        //SayParents();
+    }
+
+    private void SayParents()
+    {
+        string names = "Parents of block " + this.name + ": ";
+
+        foreach (InteractiveObjectController parent in parentObjects)
+        {
+            names += parent.name + ", ";
+        }
+
+        Debug.Log(names);
+    }
+
+    private void ClearParents()
+    {
+        Debug.Log("Clearing parents: ");
+        SayParents();
+
+        foreach(InteractiveObjectController parent in parentObjects)
+        {
+            parent.RemoveObjects(this);
+            parent.SubtractMass(mass);
+        }
+        
+        parentObjects.Clear();
+    }
+
+    
 
     private InteractiveObjectController FindRoot(InteractiveObjectController otherObject)
     {
@@ -274,7 +408,19 @@ public class InteractiveObjectController : MonoBehaviour {
     }
 
 
-    
+    public void IgnoreCollision(Collider objectToIgnore, bool ignoreStatus)
+    {
+        Physics.IgnoreCollision(this.GetComponent<Collider>(), objectToIgnore, ignoreStatus);
+
+        if (rootObject && rootObject.attachedObjects.Count > 0)
+        {
+            foreach(InteractiveObjectController attached in rootObject.attachedObjects)
+            {
+                Physics.IgnoreCollision(attached.GetComponent<Collider>(), objectToIgnore, ignoreStatus);
+                //attached.IgnoreCollision(objectToIgnore, ignoreStatus);
+            }
+        }
+    }
 
 
 
