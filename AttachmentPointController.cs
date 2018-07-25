@@ -8,7 +8,7 @@ public class AttachmentPointController : MonoBehaviour {
     public string attachmentTypeName = "";
 
     // trigger stuff
-    private InteractiveObjectController owningObject { get { return GetComponentInParent<InteractiveObjectController>(); ; } }
+    private InteractiveObjectController owningObject { get { return GetComponentInParent<InteractiveObjectController>(); } }
     public InteractiveObjectController attachingObject;
     public ManipulatorController attachingController;
     public AttachmentTriggerController attachingTrigger;

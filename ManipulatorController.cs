@@ -25,7 +25,7 @@ public class ManipulatorController : MonoBehaviour {
     bool triggerStop;
 
     public VRCharacterController character; // The character controller for character that owns this controller
-
+    
 
     // Use this for initialization
     void Start () {
