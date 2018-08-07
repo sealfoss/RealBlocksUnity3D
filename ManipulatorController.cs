@@ -49,7 +49,7 @@ public class ManipulatorController : MonoBehaviour {
         if (controller.padPressed)
         {
             //Debug.Log(device.GetAxis().x + " " + device.GetAxis().y);
-            character.MoveBody(device.GetAxis().x, device.GetAxis().y);
+            character.RotateBody(device.GetAxis().x, device.GetAxis().y);
         }
     }
 

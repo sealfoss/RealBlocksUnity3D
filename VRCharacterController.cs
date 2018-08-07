@@ -15,11 +15,11 @@ public class VRCharacterController : MonoBehaviour {
     public float resyncSpeed = 10;
     public float resyncThreshold = 0.5f;
     public float stepSpeed = 1.0f;
+    public float rotateSpeed = 10.0f;
+    public float moveSpeed = 10.0f;
 
     public Transform headTransform;
     public Transform positionMaster;
-    public float rotateSpeedMultiplier = 1;
-    public float moveSpeedMultiplier = 1;
     //public CapsuleCollider bodyCollider;
     public float bodyRadius = 0.8f;
 
@@ -42,12 +42,17 @@ public class VRCharacterController : MonoBehaviour {
         CheckCharacterPositionSync();
     }
     
-    public void MoveBody(float x, float y)
+    public void RotateBody(float x, float y)
     {
-        float rotateSpeed = Time.fixedDeltaTime * 10;
+        this.transform.RotateAround(headTransform.position, new Vector3(0, x, 0), rotateSpeed * Time.fixedDeltaTime);
+    }
+
+    public void Strafe(float x, float y)
+    {
         Vector3 forward = new Vector3(headTransform.transform.forward.x, 0, headTransform.transform.forward.z);
-        this.transform.Translate(forward * Time.fixedDeltaTime * y * moveSpeedMultiplier, Space.World);
-        this.transform.RotateAround(headTransform.position, new Vector3(0, x, 0), rotateSpeed * rotateSpeedMultiplier);
+        Vector3 side = new Vector3(headTransform.transform.right.x, 0, headTransform.transform.right.z);
+        this.transform.Translate(side * Time.fixedDeltaTime * x * moveSpeed, Space.World);
+        this.transform.Translate(forward * Time.fixedDeltaTime * y * moveSpeed, Space.World);
     }
 
     public void SetBodyCollision()
@@ -75,7 +80,7 @@ public class VRCharacterController : MonoBehaviour {
             direction.Normalize();
             //float y = headTransform.position.y - playerCharacter.GetComponent<CapsuleCollider>().height / 2;
 
-            if (playerCharacter.isGrounded) //(CheckGrounded())
+            if (playerCharacter.isGrounded) 
             {
                 moveTo = direction * playerMoveSpeed;
             }
@@ -105,7 +110,7 @@ public class VRCharacterController : MonoBehaviour {
             // target - current
         if (headCharDist > 0.25)
         {
-            Debug.Log("Sync distance: " + headCharDist);
+            //Debug.Log("Sync distance: " + headCharDist);
             Vector3 newPosition = this.transform.position + headCharDiff;
             this.transform.position = Vector3.Lerp(this.transform.position, newPosition, Time.deltaTime * resyncSpeed);
         }
