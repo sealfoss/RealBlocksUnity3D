@@ -14,7 +14,7 @@ public class ManipulatorController : MonoBehaviour {
     private InteractiveObjectController closestObject;
     private Transform interactionPoint;
     private InteractiveObjectController grabbedObject; // The object this manipulator is currently in control of
-    bool left; // whether this is the left controller
+    public bool left; // whether this is the left controller
     public float transitionRate = 10.0f;
     public float transitionThreshold = 0.1f;
     private Transform moveTarget; // where you're moving the grabbed object to.
@@ -32,7 +32,7 @@ public class ManipulatorController : MonoBehaviour {
         trackedObject = this.GetComponent<SteamVR_TrackedObject>();
         controller = this.GetComponent<SteamVR_TrackedController>();
         controllerIndex = (int)this.GetComponent<SteamVR_TrackedObject>().index;
-        left = (this.name.Equals("Controller (left)"));
+        //left = (this.name.Equals("Controller (left)"));
         grabbedObject = null;
         availableObjects = new HashSet<InteractiveObjectController>();
         interactionPoint = new GameObject().transform;
@@ -49,8 +49,11 @@ public class ManipulatorController : MonoBehaviour {
         if (controller.padPressed)
         {
             //Debug.Log(device.GetAxis().x + " " + device.GetAxis().y);
-            character.RotateBody(device.GetAxis().x, device.GetAxis().y);
+            //character.RotateBody(device.GetAxis().x, device.GetAxis().y);
+            if (left) { character.Strafe(device.GetAxis().x, device.GetAxis().y); }
+            else { character.RotateBody(device.GetAxis().x, device.GetAxis().y); }
         }
+
     }
 
     void FixedUpdate () {
